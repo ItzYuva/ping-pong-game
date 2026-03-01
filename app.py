@@ -1,27 +1,34 @@
-import os
-import requests
 import streamlit as st
 from streamlit_webrtc import webrtc_streamer, WebRtcMode
 
 from game_processor import PongVideoProcessor
 from style import CSS
 
-# TURN server config for cloud deployment
-# Set METERED_SECRET_KEY in Render environment variables
-METERED_SECRET_KEY = os.environ.get("METERED_SECRET_KEY", "")
-METERED_DOMAIN = os.environ.get("METERED_DOMAIN", "handpong.metered.live")
-
-@st.cache_data(ttl=3600)
-def get_ice_servers():
-    if METERED_SECRET_KEY:
-        try:
-            url = f"https://{METERED_DOMAIN}/api/v1/turn/credentials?apiKey={METERED_SECRET_KEY}"
-            resp = requests.get(url, timeout=5)
-            resp.raise_for_status()
-            return resp.json()
-        except Exception:
-            pass
-    return [{"urls": ["stun:stun.l.google.com:19302"]}]
+RTC_CONFIGURATION = {
+    "iceServers": [
+        {"urls": ["stun:stun.l.google.com:19302"]},
+        {
+            "urls": "turn:global.relay.metered.ca:80",
+            "username": "openrelayproject",
+            "credential": "openrelayproject",
+        },
+        {
+            "urls": "turn:global.relay.metered.ca:80?transport=tcp",
+            "username": "openrelayproject",
+            "credential": "openrelayproject",
+        },
+        {
+            "urls": "turn:global.relay.metered.ca:443",
+            "username": "openrelayproject",
+            "credential": "openrelayproject",
+        },
+        {
+            "urls": "turns:global.relay.metered.ca:443?transport=tcp",
+            "username": "openrelayproject",
+            "credential": "openrelayproject",
+        },
+    ]
+}
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -139,7 +146,7 @@ with col_video:
             "audio": False,
         },
         async_processing=True,
-        rtc_configuration={"iceServers": get_ice_servers()},
+        rtc_configuration=RTC_CONFIGURATION,
     )
     st.markdown("</div>", unsafe_allow_html=True)
 
