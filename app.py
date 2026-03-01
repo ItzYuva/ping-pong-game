@@ -1,34 +1,29 @@
+import os
 import streamlit as st
 from streamlit_webrtc import webrtc_streamer, WebRtcMode
 
 from game_processor import PongVideoProcessor
 from style import CSS
 
-RTC_CONFIGURATION = {
-    "iceServers": [
-        {"urls": ["stun:stun.l.google.com:19302"]},
-        {
-            "urls": "turn:global.relay.metered.ca:80",
-            "username": "openrelayproject",
-            "credential": "openrelayproject",
-        },
-        {
-            "urls": "turn:global.relay.metered.ca:80?transport=tcp",
-            "username": "openrelayproject",
-            "credential": "openrelayproject",
-        },
-        {
-            "urls": "turn:global.relay.metered.ca:443",
-            "username": "openrelayproject",
-            "credential": "openrelayproject",
-        },
-        {
-            "urls": "turns:global.relay.metered.ca:443?transport=tcp",
-            "username": "openrelayproject",
-            "credential": "openrelayproject",
-        },
-    ]
-}
+# TURN credentials from Metered — set as env vars on Render
+TURN_USERNAME = os.environ.get("TURN_USERNAME", "")
+TURN_PASSWORD = os.environ.get("TURN_PASSWORD", "")
+
+def get_rtc_configuration():
+    ice_servers = [{"urls": ["stun:stun.relay.metered.ca:80"]}]
+    if TURN_USERNAME and TURN_PASSWORD:
+        for url in [
+            "turn:a.relay.metered.ca:80",
+            "turn:a.relay.metered.ca:80?transport=tcp",
+            "turn:a.relay.metered.ca:443",
+            "turns:a.relay.metered.ca:443?transport=tcp",
+        ]:
+            ice_servers.append({
+                "urls": url,
+                "username": TURN_USERNAME,
+                "credential": TURN_PASSWORD,
+            })
+    return {"iceServers": ice_servers}
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -146,7 +141,7 @@ with col_video:
             "audio": False,
         },
         async_processing=True,
-        rtc_configuration=RTC_CONFIGURATION,
+        rtc_configuration=get_rtc_configuration(),
     )
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -158,7 +153,6 @@ if ctx.video_processor:
     if restart:
         ctx.video_processor.restart_flag = True
 
-    # Read scores back for the styled cards
     s = ctx.video_processor.score
     score_left_ph.markdown(
         f"<div class='score-card'>"
