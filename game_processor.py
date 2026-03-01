@@ -47,6 +47,27 @@ class PongVideoProcessor(VideoProcessorBase):
     ball_speed: int = 15
 
     def __init__(self):
+        # Keep __init__ lightweight so WebRTC handshake completes within 10s.
+        # Heavy resources (images, model) are loaded on the first frame.
+        self._initialized = False
+        self.detector = None
+        self.frame_timestamp_ms = 0
+
+        self.imgBackground = None
+        self.imgGameOver = None
+        self.imgBall = None
+        self.imgBat1 = None
+        self.imgBat2 = None
+
+        # Game state
+        self.ballpos = [100, 100]
+        self.speedX = 15
+        self.speedY = 15
+        self.game_over = False
+        self.score = [0, 0]
+
+    def _lazy_init(self):
+        """Load images and model on first frame, not during __init__."""
         # Load resource images
         self.imgBackground = cv2.imread(os.path.join(RESOURCES_DIR, "Background.png"))
         self.imgGameOver = cv2.imread(os.path.join(RESOURCES_DIR, "gameOver.png"))
@@ -54,7 +75,6 @@ class PongVideoProcessor(VideoProcessorBase):
         self.imgBat1 = cv2.imread(os.path.join(RESOURCES_DIR, "bat1.png"), cv2.IMREAD_UNCHANGED)
         self.imgBat2 = cv2.imread(os.path.join(RESOURCES_DIR, "bat2.png"), cv2.IMREAD_UNCHANGED)
 
-        # Resize background and game-over to match game resolution
         if self.imgBackground is not None:
             self.imgBackground = cv2.resize(self.imgBackground, (GAME_W, GAME_H))
         if self.imgGameOver is not None:
@@ -70,14 +90,7 @@ class PongVideoProcessor(VideoProcessorBase):
             min_tracking_confidence=0.5,
         )
         self.detector = mp.tasks.vision.HandLandmarker.create_from_options(options)
-        self.frame_timestamp_ms = 0
-
-        # Game state
-        self.ballpos = [100, 100]
-        self.speedX = 15
-        self.speedY = 15
-        self.game_over = False
-        self.score = [0, 0]
+        self._initialized = True
 
     def _reset_game(self):
         self.ballpos = [100, 100]
@@ -91,6 +104,9 @@ class PongVideoProcessor(VideoProcessorBase):
 
     def _detect_hands(self, img):
         """Run hand detection and return list of dicts with 'type' and 'bbox'."""
+        if self.detector is None:
+            return []
+
         rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
         self.frame_timestamp_ms += 33  # ~30fps
@@ -101,15 +117,12 @@ class PongVideoProcessor(VideoProcessorBase):
             return hands
 
         for i, landmarks in enumerate(result.hand_landmarks):
-            # Get handedness (Left/Right) — mediapipe reports from camera's
-            # perspective, but we flipped the image, so we swap labels
             handedness = result.handedness[i][0].category_name
             if handedness == "Left":
                 handedness = "Right"
             elif handedness == "Right":
                 handedness = "Left"
 
-            # Calculate bounding box from landmarks
             xs = [lm.x * GAME_W for lm in landmarks]
             ys = [lm.y * GAME_H for lm in landmarks]
             x_min, x_max = int(min(xs)), int(max(xs))
@@ -124,6 +137,10 @@ class PongVideoProcessor(VideoProcessorBase):
 
     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
         img = frame.to_ndarray(format="bgr24")
+
+        # Lazy-load heavy resources on first frame
+        if not self._initialized:
+            self._lazy_init()
 
         # Handle restart
         if self.restart_flag:

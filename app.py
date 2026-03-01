@@ -13,10 +13,10 @@ def get_rtc_configuration():
     ice_servers = [{"urls": ["stun:stun.relay.metered.ca:80"]}]
     if TURN_USERNAME and TURN_PASSWORD:
         for url in [
-            "turn:a.relay.metered.ca:80",
-            "turn:a.relay.metered.ca:80?transport=tcp",
-            "turn:a.relay.metered.ca:443",
-            "turns:a.relay.metered.ca:443?transport=tcp",
+            "turn:global.relay.metered.ca:80",
+            "turn:global.relay.metered.ca:80?transport=tcp",
+            "turn:global.relay.metered.ca:443",
+            "turns:global.relay.metered.ca:443?transport=tcp",
         ]:
             ice_servers.append({
                 "urls": url,
